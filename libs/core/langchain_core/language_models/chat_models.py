@@ -540,7 +540,7 @@ class BaseChatModel(BaseLanguageModel[AIMessage], ABC):
                 for chunk in self._stream(input_messages, stop=stop, **kwargs):
                     if chunk.message.id is None:
                         chunk.message.id = run_id
-                    chunk.message.response_metadata = _gen_info_and_msg_metadata(chunk)
+                    _update_response_metadata(chunk.message, chunk.generation_info)
                     if self.output_version == "v1":
                         # Overwrite .content with .content_blocks
                         chunk.message = _update_message_content_to_blocks(
@@ -672,7 +672,7 @@ class BaseChatModel(BaseLanguageModel[AIMessage], ABC):
             ):
                 if chunk.message.id is None:
                     chunk.message.id = run_id
-                chunk.message.response_metadata = _gen_info_and_msg_metadata(chunk)
+                _update_response_metadata(chunk.message, chunk.generation_info)
                 if self.output_version == "v1":
                     # Overwrite .content with .content_blocks
                     chunk.message = _update_message_content_to_blocks(
@@ -1180,7 +1180,7 @@ class BaseChatModel(BaseLanguageModel[AIMessage], ABC):
             index = -1
             index_type = ""
             for chunk in self._stream(messages, stop=stop, **kwargs):
-                chunk.message.response_metadata = _gen_info_and_msg_metadata(chunk)
+                _update_response_metadata(chunk.message, chunk.generation_info)
                 if self.output_version == "v1":
                     # Overwrite .content with .content_blocks
                     chunk.message = _update_message_content_to_blocks(
@@ -1239,9 +1239,7 @@ class BaseChatModel(BaseLanguageModel[AIMessage], ABC):
         for idx, generation in enumerate(result.generations):
             if run_manager and generation.message.id is None:
                 generation.message.id = f"{LC_ID_PREFIX}-{run_manager.run_id}-{idx}"
-            generation.message.response_metadata = _gen_info_and_msg_metadata(
-                generation
-            )
+            _update_response_metadata(generation.message, generation.generation_info)
         if len(result.generations) == 1 and result.llm_output is not None:
             result.generations[0].message.response_metadata = {
                 **result.llm_output,
@@ -1298,7 +1296,7 @@ class BaseChatModel(BaseLanguageModel[AIMessage], ABC):
             index = -1
             index_type = ""
             async for chunk in self._astream(messages, stop=stop, **kwargs):
-                chunk.message.response_metadata = _gen_info_and_msg_metadata(chunk)
+                _update_response_metadata(chunk.message, chunk.generation_info)
                 if self.output_version == "v1":
                     # Overwrite .content with .content_blocks
                     chunk.message = _update_message_content_to_blocks(
@@ -1357,9 +1355,7 @@ class BaseChatModel(BaseLanguageModel[AIMessage], ABC):
         for idx, generation in enumerate(result.generations):
             if run_manager and generation.message.id is None:
                 generation.message.id = f"{LC_ID_PREFIX}-{run_manager.run_id}-{idx}"
-            generation.message.response_metadata = _gen_info_and_msg_metadata(
-                generation
-            )
+            _update_response_metadata(generation.message, generation.generation_info)
         if len(result.generations) == 1 and result.llm_output is not None:
             result.generations[0].message.response_metadata = {
                 **result.llm_output,
@@ -1755,13 +1751,13 @@ class SimpleChatModel(BaseChatModel):
         )
 
 
-def _gen_info_and_msg_metadata(
-    generation: ChatGeneration | ChatGenerationChunk,
-) -> dict:
-    return {
-        **(generation.generation_info or {}),
-        **generation.message.response_metadata,
-    }
+def _update_response_metadata(
+    message: AIMessage | AIMessageChunk, generation_info: dict | None
+) -> None:
+    if generation_info:
+        for k, v in generation_info.items():
+            if k not in message.response_metadata:
+                message.response_metadata[k] = v
 
 
 _MAX_CLEANUP_DEPTH = 100
